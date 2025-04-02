@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id               Int      @id @default(autoincrement())
+  name             String
+  site             String // Vous pouvez ajuster le type selon vos options
+  terrainDimension String
+  phone            String // Utilisez String pour les numéros de téléphone
+  email            String
+  numTerrain       String
+  photo            String? // Si vous stockez le chemin de la photo
+  createdAt        DateTime @default(now()) // Date d'enregistrement
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  clientName    String
+  paymentReason String // Motif de paiement
+  amount        String // Montant du paiement
+  currency      String // Devise
+  paymentMode   String // Mode de paiement
+  site          String // Site ou concession
+  terrainNumber String // Numéro du terrain
+  clientNumber  String // Numéro du client
+  email         String // Email du client
+  createdAt     DateTime @default(now()) // Date d'enregistrement
+}
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String // Email du client
+  name  String
+  role  Role
+  phone String
+}
+
+enum Role {
+  admin
+  agent
+}
