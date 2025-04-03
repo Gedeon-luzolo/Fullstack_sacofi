@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import prisma from "../config/prisma"; // Assurez-vous que le chemin est correct
+import { db } from "../config/db"; // Importer la connexion à la base de données
 import { v4 as uuidv4 } from "uuid"; // Pour générer un nom de fichier unique
 import path from "path";
 import fs from "fs";
@@ -19,51 +19,59 @@ export const createClient = async (req: Request, res: Response) => {
     fs.renameSync(photo.path, path.join(__dirname, "../../uploads", fileName));
   }
 
-  try {
-    const client = await prisma.client.create({
-      data: {
-        name,
-        site,
-        terrainDimension,
-        phone,
-        email,
-        numTerrain,
-        photo: photoPath, // Enregistrer le chemin de l'image
-      },
-    });
-    res.status(201).json(client);
-  } catch (error) {
-    res.status(500).json({ error: "Erreur lors de la création du client" });
-  }
+  const query = `INSERT INTO client (name, site, terrainDimension, phone, email, numTerrain, photo) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  const values = [
+    name,
+    site,
+    terrainDimension,
+    phone,
+    email,
+    numTerrain,
+    photoPath,
+  ];
+
+  db.query(query, values, (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la création du client" });
+    }
+    res
+      .status(201)
+      .json({ id: results.insertId, ...req.body, photo: photoPath });
+  });
 };
 
 // Récupérer tous les clients
 export const getClients = async (req: Request, res: Response) => {
-  try {
-    const clients = await prisma.client.findMany();
-    res.status(200).json(clients);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la récupération des clients" });
-  }
+  const query = `SELECT * FROM client`;
+
+  db.query(query, (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la récupération des clients" });
+    }
+    res.status(200).json(results);
+  });
 };
 
 // Récupérer un client par ID
 export const getClientById = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const query = `SELECT * FROM client WHERE id = ?`;
 
-  try {
-    const client = await prisma.client.findUnique({
-      where: { id: Number(id) },
-    });
-    if (!client) {
+  db.query(query, [id], (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la récupération du client" });
+    }
+    if (results.length === 0) {
       return res.status(404).json({ error: "Client non trouvé" });
     }
-    res.status(200).json(client);
-  } catch (error) {
-    res.status(500).json({ error: "Erreur lors de la récupération du client" });
-  }
+    res.status(200).json(results[0]);
+  });
 };
 
 // Mettre à jour un client
@@ -79,35 +87,39 @@ export const updateClient = async (req: Request, res: Response) => {
     fs.renameSync(photo.path, path.join(__dirname, "../../uploads", fileName));
   }
 
-  try {
-    const client = await prisma.client.update({
-      where: { id: Number(id) },
-      data: {
-        name,
-        site,
-        terrainDimension,
-        phone,
-        email,
-        numTerrain,
-        photo: photoPath, // Mettre à jour le chemin de l'image
-      },
-    });
-    res.status(200).json(client);
-  } catch (error) {
-    res.status(500).json({ error: "Erreur lors de la mise à jour du client" });
-  }
+  const query = `UPDATE client SET name = ?, site = ?, terrainDimension = ?, phone = ?, email = ?, numTerrain = ?, photo = ? WHERE id = ?`;
+  const values = [
+    name,
+    site,
+    terrainDimension,
+    phone,
+    email,
+    numTerrain,
+    photoPath,
+    id,
+  ];
+
+  db.query(query, values, (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la mise à jour du client" });
+    }
+    res.status(200).json({ id, ...req.body, photo: photoPath });
+  });
 };
 
 // Supprimer un client
 export const deleteClient = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const query = `DELETE FROM client WHERE id = ?`;
 
-  try {
-    await prisma.client.delete({
-      where: { id: Number(id) },
-    });
+  db.query(query, [id], (error) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la suppression du client" });
+    }
     res.status(204).send();
-  } catch (error) {
-    res.status(500).json({ error: "Erreur lors de la suppression du client" });
-  }
+  });
 };

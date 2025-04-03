@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import prisma from "../config/prisma"; // Assurez-vous que le chemin est correct
+import { db } from "../config/db"; // Importer la connexion à la base de données
 
 // Créer un paiement
 export const createPayment = async (req: Request, res: Response) => {
@@ -15,55 +15,59 @@ export const createPayment = async (req: Request, res: Response) => {
     email,
   } = req.body;
 
-  try {
-    const payment = await prisma.payment.create({
-      data: {
-        clientName,
-        paymentReason,
-        amount,
-        currency,
-        paymentMode,
-        site,
-        terrainNumber,
-        clientNumber,
-        email,
-      },
-    });
-    res.status(201).json(payment);
-  } catch (error) {
-    res.status(500).json({ error: "Erreur lors de la création du paiement" });
-  }
+  const query = `INSERT INTO payment (clientName, paymentReason, amount, currency, paymentMode, site, terrainNumber, clientNumber, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const values = [
+    clientName,
+    paymentReason,
+    amount,
+    currency,
+    paymentMode,
+    site,
+    terrainNumber,
+    clientNumber,
+    email,
+  ];
+
+  db.query(query, values, (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la création du paiement" });
+    }
+    res.status(201).json({ id: results.insertId, ...req.body });
+  });
 };
 
 // Récupérer tous les paiements
 export const getPayments = async (req: Request, res: Response) => {
-  try {
-    const payments = await prisma.payment.findMany();
-    res.status(200).json(payments);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la récupération des paiements" });
-  }
+  const query = `SELECT * FROM payment`;
+
+  db.query(query, (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la récupération des paiements" });
+    }
+    res.status(200).json(results);
+  });
 };
 
 // Récupérer un paiement par ID
 export const getPaymentById = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const query = `SELECT * FROM payment WHERE id = ?`;
 
-  try {
-    const payment = await prisma.payment.findUnique({
-      where: { id: Number(id) },
-    });
-    if (!payment) {
+  db.query(query, [id], (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la récupération du paiement" });
+    }
+    if (results.length === 0) {
       return res.status(404).json({ error: "Paiement non trouvé" });
     }
-    res.status(200).json(payment);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la récupération du paiement" });
-  }
+    res.status(200).json(results[0]);
+  });
 };
 
 // Mettre à jour un paiement
@@ -81,41 +85,85 @@ export const updatePayment = async (req: Request, res: Response) => {
     email,
   } = req.body;
 
-  try {
-    const payment = await prisma.payment.update({
-      where: { id: Number(id) },
-      data: {
-        clientName,
-        paymentReason,
-        amount,
-        currency,
-        paymentMode,
-        site,
-        terrainNumber,
-        clientNumber,
-        email,
-      },
-    });
-    res.status(200).json(payment);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la mise à jour du paiement" });
-  }
+  const query = `UPDATE payment SET clientName = ?, paymentReason = ?, amount = ?, currency = ?, paymentMode = ?, site = ?, terrainNumber = ?, clientNumber = ?, email = ? WHERE id = ?`;
+  const values = [
+    clientName,
+    paymentReason,
+    amount,
+    currency,
+    paymentMode,
+    site,
+    terrainNumber,
+    clientNumber,
+    email,
+    id,
+  ];
+
+  db.query(query, values, (error, results) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la mise à jour du paiement" });
+    }
+    res.status(200).json({ id, ...req.body });
+  });
 };
 
 // Supprimer un paiement
 export const deletePayment = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const query = `DELETE FROM payment WHERE id = ?`;
 
-  try {
-    await prisma.payment.delete({
-      where: { id: Number(id) },
-    });
+  db.query(query, [id], (error) => {
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Erreur lors de la suppression du paiement" });
+    }
     res.status(204).send();
-  } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la suppression du paiement" });
-  }
+  });
+};
+
+// Compter les paiements par paymentReason
+export const countPaymentsByReason = async (req: Request, res: Response) => {
+  const sql = "SELECT COUNT(*) as count FROM payment WHERE paymentReason = ?";
+
+  db.query(sql, ["souscription"], (err, results) => {
+    if (err) {
+      console.error("Erreur lors de la récupération des données :", err);
+      return res.status(500).json({ error: "Erreur serveur" });
+    }
+    const count = results[0].count;
+    res.json({ count });
+  });
+};
+
+export const countConstruction = async (req: Request, res: Response) => {
+  const sql = "SELECT COUNT(*) as count FROM payment WHERE paymentReason = ?";
+
+  db.query(sql, ["construction"], (err, results) => {
+    if (err) {
+      console.error(
+        "Erreur lors de la récupération des données construction :",
+        err
+      );
+      return res.status(500).json({ error: "Erreur serveur" });
+    }
+    const count = results[0].count;
+    res.json({ count });
+  });
+};
+
+export const getTotal = async (req: Request, res: Response) => {
+  const sql =
+    "SELECT currency, SUM(amount) AS total_amount FROM payment GROUP BY currency";
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("Erreur lors de la récupération des totaux :", err);
+      return res.status(500).json({ error: "Erreur serveur" });
+    }
+
+    res.json(results);
+  });
 };
