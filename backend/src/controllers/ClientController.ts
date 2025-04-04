@@ -1,25 +1,13 @@
 import { Request, Response } from "express";
-import { db } from "../config/db"; // Importer la connexion à la base de données
-import { v4 as uuidv4 } from "uuid"; // Pour générer un nom de fichier unique
-import path from "path";
-import fs from "fs";
+import { db } from "../config/db";
+import { io } from "../app";
 
 // Créer un client
 export const createClient = async (req: Request, res: Response) => {
-  const { name, site, terrainDimension, phone, email, numTerrain } = req.body;
-  const photo = req.file; // Récupérer le fichier téléchargé
+  const { name, site, terrainDimension, phone, email, numTerrain, agent } =
+    req.body;
 
-  let photoPath = null;
-  if (photo) {
-    // Générer un nom de fichier unique
-    const fileName = `${uuidv4()}${path.extname(photo.originalname)}`;
-    photoPath = `uploads/${fileName}`;
-
-    // Déplacer le fichier vers le dossier de destination
-    fs.renameSync(photo.path, path.join(__dirname, "../../uploads", fileName));
-  }
-
-  const query = `INSERT INTO client (name, site, terrainDimension, phone, email, numTerrain, photo) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  const query = `INSERT INTO client (name, site, terrainDimension, phone, email, numTerrain, agent) VALUES (?, ?, ?, ?,?, ?, ?)`;
   const values = [
     name,
     site,
@@ -27,7 +15,7 @@ export const createClient = async (req: Request, res: Response) => {
     phone,
     email,
     numTerrain,
-    photoPath,
+    agent,
   ];
 
   db.query(query, values, (error, results) => {
@@ -36,9 +24,26 @@ export const createClient = async (req: Request, res: Response) => {
         .status(500)
         .json({ error: "Erreur lors de la création du client" });
     }
-    res
-      .status(201)
-      .json({ id: results.insertId, ...req.body, photo: photoPath });
+
+    // Émettre une notification
+    const notificationMessage = `Un nouveau client a été ajouté par l'utilisateur`;
+    io.emit("notification", {
+      message: notificationMessage,
+      userId: agent,
+    });
+
+    // Stocker la notification dans la base de données
+    const notificationQuery = `INSERT INTO notifications (message, userId) VALUES (?, ?)`;
+    db.query(notificationQuery, [notificationMessage, agent], (err) => {
+      if (err) {
+        console.error(
+          "Erreur lors de l'insertion de la notification dans la base de données",
+          err
+        );
+      }
+    });
+
+    res.status(201).json({ id: results.insertId, ...req.body });
   });
 };
 
@@ -77,27 +82,11 @@ export const getClientById = async (req: Request, res: Response) => {
 // Mettre à jour un client
 export const updateClient = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, site, terrainDimension, phone, email, numTerrain } = req.body;
-  const photo = req.file; // Récupérer le fichier téléchargé
+  const { name, site, terrainDimension, phone, email, numTerrain, userId } =
+    req.body;
 
-  let photoPath = null;
-  if (photo) {
-    const fileName = `${uuidv4()}${path.extname(photo.originalname)}`;
-    photoPath = `uploads/${fileName}`;
-    fs.renameSync(photo.path, path.join(__dirname, "../../uploads", fileName));
-  }
-
-  const query = `UPDATE client SET name = ?, site = ?, terrainDimension = ?, phone = ?, email = ?, numTerrain = ?, photo = ? WHERE id = ?`;
-  const values = [
-    name,
-    site,
-    terrainDimension,
-    phone,
-    email,
-    numTerrain,
-    photoPath,
-    id,
-  ];
+  const query = `UPDATE client SET name = ?, site = ?, terrainDimension = ?, phone = ?, email = ?, numTerrain = ? WHERE id = ?`;
+  const values = [name, site, terrainDimension, phone, email, numTerrain, id];
 
   db.query(query, values, (error, results) => {
     if (error) {
@@ -105,7 +94,7 @@ export const updateClient = async (req: Request, res: Response) => {
         .status(500)
         .json({ error: "Erreur lors de la mise à jour du client" });
     }
-    res.status(200).json({ id, ...req.body, photo: photoPath });
+    res.status(200).json({ id, ...req.body });
   });
 };
 
@@ -120,6 +109,11 @@ export const deleteClient = async (req: Request, res: Response) => {
         .status(500)
         .json({ error: "Erreur lors de la suppression du client" });
     }
+    // Émettre une notification
+    io.emit("notification", {
+      message: `Le client avec l'ID ${id} a été supprimé!`,
+      agent: "admin", // Remplacez par l'ID de l'utilisateur qui a effectué l'action si disponible
+    });
     res.status(204).send();
   });
 };

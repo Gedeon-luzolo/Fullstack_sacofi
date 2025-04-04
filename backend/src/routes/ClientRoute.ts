@@ -23,10 +23,10 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Routes pour les clients
-router.post("/client", upload.single("photo"), createClient); // 'photo' est le nom du champ dans le formulaire
-router.get("/client", getClients);
-router.get("/client/:id", getClientById as RequestHandler);
-router.put("/client/:id", upload.single("photo"), updateClient); // 'photo' est le nom du champ dans le formulaire
-router.delete("/client/:id", deleteClient);
+router.post("/client", upload.single("photo"), createClient as RequestHandler); // Créer un client avec photo
+router.get("/client", getClients); // Récupérer tous les clients
+router.get("/client/:id", getClientById as RequestHandler); // Récupérer un client par ID
+router.put("/client/:id", upload.single("photo"), updateClient); // Mettre à jour un client avec photo
+router.delete("/client/:id", deleteClient); // Supprimer un client
 
 export default router;

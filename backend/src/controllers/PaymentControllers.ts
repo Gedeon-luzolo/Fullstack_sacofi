@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { db } from "../config/db"; // Importer la connexion à la base de données
+import { db } from "../config/db";
+import { io } from "../app";
 
 // Créer un paiement
 export const createPayment = async (req: Request, res: Response) => {
@@ -13,9 +14,10 @@ export const createPayment = async (req: Request, res: Response) => {
     terrainNumber,
     clientNumber,
     email,
+    agent,
   } = req.body;
 
-  const query = `INSERT INTO payment (clientName, paymentReason, amount, currency, paymentMode, site, terrainNumber, clientNumber, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const query = `INSERT INTO payment (clientName, paymentReason, amount, currency, paymentMode, site, terrainNumber, clientNumber, email, agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
   const values = [
     clientName,
     paymentReason,
@@ -26,14 +28,34 @@ export const createPayment = async (req: Request, res: Response) => {
     terrainNumber,
     clientNumber,
     email,
+    agent,
   ];
 
   db.query(query, values, (error, results) => {
     if (error) {
+      console.log("erreur lors de la création du paiement ", error);
       return res
         .status(500)
         .json({ error: "Erreur lors de la création du paiement" });
     }
+    // Émettre une notification
+    const notificationMessage = `Un nouveau paiement a été créé par l'utilisateur`;
+    io.emit("notification", {
+      message: notificationMessage,
+      userId: agent,
+    });
+
+    // Stocker la notification dans la base de données
+    const notificationQuery = `INSERT INTO notifications (message, userId) VALUES (?, ?)`;
+    db.query(notificationQuery, [notificationMessage, agent], (err) => {
+      if (err) {
+        console.error(
+          "Erreur lors de l'insertion de la notification dans la base de données",
+          err
+        );
+      }
+    });
+
     res.status(201).json({ id: results.insertId, ...req.body });
   });
 };
